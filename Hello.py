@@ -50,7 +50,7 @@ for message in st.session_state.messages:
         st.markdown(message["content"])
 
 # React to user input
-if prompt := st.chat_input("Ask me questions about medicine or health science."):
+if prompt := st.chat_input("Ask me questions about medicine or health science. (e.g: What is diabetes?)"):
     # Display user message in chat message container
     st.chat_message("user").markdown(prompt)
     
