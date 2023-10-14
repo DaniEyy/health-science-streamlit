@@ -29,9 +29,9 @@ def is_insufficient(prompt):
     return len(prompt.split()) <= 1
 
 # Sample DataFrame with user_chat and response columns
-df = pd.read_csv("https://raw.githubusercontent.com/DaniEyy/health-science-streamlit/main/medicine.csv")
+df = pd.read_csv('medicine.csv')
 
-st.title("Welcome to MediBot!")
+st.title("Welcome to MediBot! 🤖")
 
 
 description = """
