@@ -1,51 +1,82 @@
-# Copyright (c) Streamlit Inc. (2018-2022) Snowflake Inc. (2022)
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 import streamlit as st
-from streamlit.logger import get_logger
+import pandas as pd
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
 
-LOGGER = get_logger(__name__)
+# Define a function to get the most similar response
+def get_most_similar_response(df, query, top_k=1):
+    # Step 1: Prepare Data
+    vectorizer = TfidfVectorizer()
+    all_data = list(df['Questions']) + [query]
+
+    # Step 2: TF-IDF Vectorization
+    tfidf_matrix = vectorizer.fit_transform(all_data)
+
+    # Step 3: Compute Similarity
+    document_vectors = tfidf_matrix[:-1]
+    query_vector = tfidf_matrix[-1]
+    similarity_scores = cosine_similarity(query_vector, document_vectors)
+
+    # Step 4: Sort and Pick Top k Responses
+    sorted_indexes = similarity_scores.argsort()[0][-top_k:]
+    
+    # Fetch the corresponding responses from the DataFrame
+    most_similar_responses = df.iloc[sorted_indexes]['Answers'].values
+    
+    return most_similar_responses
+
+def is_insufficient(prompt):
+    return len(prompt.split()) <= 1
+
+# Sample DataFrame with user_chat and response columns
+df = pd.read_csv('medicine.csv')
+
+st.title("Welcome to MediBot!")
 
 
-def run():
-    st.set_page_config(
-        page_title="Hello",
-        page_icon="👋",
-    )
+description = """
+Welcome, I am your trusted companion in the world of medicine and health science. Whether you have questions about the inner workings of the human body, want to understand common medical conditions, or seek information on the latest advancements in healthcare, MediBot is here to assist you. We provide answers to a wide range of questions related to health and medicine. From explaining the function of vital organs to clarifying complex medical procedures, our goal is to empower you with knowledge and information. Ask us anything, and we'll do our best to provide you with accurate and helpful insights into the fascinating world of medicine.
+"""
 
-    st.write("# Welcome to Streamlit! 👋")
+st.markdown(description)
 
-    st.sidebar.success("Select a demo above.")
+# Initialize chat history
+if "messages" not in st.session_state:
+    st.session_state.messages = []
 
-    st.markdown(
-        """
-        Streamlit is an open-source app framework built specifically for
-        Machine Learning and Data Science projects.
-        **👈 Select a demo from the sidebar** to see some examples
-        of what Streamlit can do!
-        ### Want to learn more?
-        - Check out [streamlit.io](https://streamlit.io)
-        - Jump into our [documentation](https://docs.streamlit.io)
-        - Ask a question in our [community
-          forums](https://discuss.streamlit.io)
-        ### See more complex demos
-        - Use a neural net to [analyze the Udacity Self-driving Car Image
-          Dataset](https://github.com/streamlit/demo-self-driving)
-        - Explore a [New York City rideshare dataset](https://github.com/streamlit/demo-uber-nyc-pickups)
-    """
-    )
+# Display chat messages from history on app rerun
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
 
+# React to user input
+if prompt := st.chat_input("Ask me questions about medicine or health science."):
+    # Display user message in chat message container
+    st.chat_message("user").markdown(prompt)
+    
+    # Add user message to chat history
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    
+    if is_insufficient(prompt):
+        insufficient_response = "Insufficient Prompt. Please clarify what you want to know."
+        with st.chat_message("assistant"):
+            st.markdown(insufficient_response)
+        st.session_state.messages.append({"role": "assistant", "content": insufficient_response, "related_query": prompt})
+    else:
+        # Check if the same prompt was already answered previously
+        previous_responses = [m["content"] for m in st.session_state.messages if m["role"] == "assistant" and m["related_query"] == prompt]
+        
+        if previous_responses:
+            for response in previous_responses:
+                with st.chat_message("assistant"):
+                    st.markdown(response)
+        else:
+            # Get and display assistant response in chat message container
+            responses = get_most_similar_response(df, prompt)
+            for response in responses:
+                with st.chat_message("assistant"):
+                    st.markdown(f"{response}")
 
-if __name__ == "__main__":
-    run()
+            # Add assistant response to chat history
+            for response in responses:
+                st.session_state.messages.append({"role": "assistant", "content": f"Echo: {response}", "related_query": prompt})
